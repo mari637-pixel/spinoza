@@ -41,13 +41,28 @@ a{color:var(--accent)}
 sup a{text-decoration:none;padding:0 1px}
 .chapter{margin-bottom:2em}
 :target{background:rgba(224,162,107,.25)}
-#settings span{font-size:12px;color:var(--muted)}
+#sbox{display:none;align-items:center;gap:6px}
+body.search-open #sbox{display:flex}
+body.search-open #bar .title,body.search-open #sBtn{display:none}
+#q{width:min(260px,40vw);padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit}
+#q:focus{outline:none;border-color:var(--accent)}
+#qcount{color:var(--muted);min-width:5.5em;text-align:center;font-size:13px}
+mark.hit{background:rgba(224,190,60,.45);color:inherit;border-radius:2px}
+mark.hit.cur{background:var(--accent);color:var(--bg)}
 </style>
 </head>
 <body>
 <div id="bar">
   <button id="tocBtn" aria-label="Indice">☰ Indice</button>
   <div class="title">Scribano · Guida alla lettura dell'Etica di Spinoza</div>
+  <div id="sbox">
+    <input id="q" type="search" placeholder="Cerca nel testo…" autocomplete="off" aria-label="Cerca nel testo">
+    <span id="qcount"></span>
+    <button id="qPrev" aria-label="Risultato precedente">↑</button>
+    <button id="qNext" aria-label="Risultato successivo">↓</button>
+    <button id="qClose" aria-label="Chiudi ricerca">✕</button>
+  </div>
+  <button id="sBtn" aria-label="Cerca">🔍 Cerca</button>
   <button id="fMinus" aria-label="Riduci testo">A−</button>
   <button id="fPlus" aria-label="Ingrandisci testo">A+</button>
   <button id="themeBtn" aria-label="Tema">◐</button>
@@ -1019,6 +1034,74 @@ sup a{text-decoration:none;padding:0 1px}
   var open=get('toc',innerWidth>=1100?'1':'0')==='1';
   body.classList.toggle('toc-open',open);
   document.getElementById('tocBtn').onclick=function(){body.classList.toggle('toc-open');set('toc',body.classList.contains('toc-open')?'1':'0')};
+  /* ---- search: accent- and case-insensitive, matches span inline tags ---- */
+  var main=document.querySelector('main'),q=document.getElementById('q'),qcount=document.getElementById('qcount'),marks=[],cur=-1,timer;
+  function fold(s){var o='';for(var i=0;i<s.length;i++){var c=s[i].normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();o+=c.length===1?c:s[i].toLowerCase().charAt(0)||' '}return o.replace(/[\u2018\u2019]/g,"'")}
+  function clearMarks(){
+    marks.forEach(function(m){var p=m.parentNode;if(!p)return;while(m.firstChild)p.insertBefore(m.firstChild,m);p.removeChild(m)});
+    main.normalize();marks=[];cur=-1;
+  }
+  function textNodes(block){
+    var w=document.createTreeWalker(block,NodeFilter.SHOW_TEXT),a=[],n;
+    while(n=w.nextNode())a.push(n);return a;
+  }
+  function highlight(term){
+    var blocks=main.querySelectorAll('p,h1,h2,h3,li'),found=[];
+    blocks.forEach(function(b){
+      var nodes=textNodes(b),str='',map=[];
+      nodes.forEach(function(n,i){var f=fold(n.nodeValue);for(var k=0;k<f.length;k++)map.push([i,k]);str+=f});
+      var pos=0,hits=[],i;
+      while((i=str.indexOf(term,pos))>-1){hits.push(i);pos=i+term.length}
+      for(var h=hits.length-1;h>=0;h--){
+        var s=hits[h],e=s+term.length-1,segs=[];
+        for(var x=s;x<=e;x++){
+          var m=map[x],last=segs[segs.length-1];
+          if(last&&last.n===m[0]&&last.e===m[1]-1)last.e=m[1];else segs.push({n:m[0],s:m[1],e:m[1]});
+        }
+        var created=[];
+        for(var j=segs.length-1;j>=0;j--){
+          var sg=segs[j],nd=nodes[sg.n],r=document.createRange();
+          r.setStart(nd,sg.s);r.setEnd(nd,sg.e+1);
+          var mk=document.createElement('mark');mk.className='hit';r.surroundContents(mk);created.unshift(mk);
+        }
+        found.unshift(created);
+      }
+    });
+    return found;
+  }
+  function show(i){
+    if(!marks.length)return;
+    if(cur>-1)document.querySelectorAll('mark.hit.cur').forEach(function(m){m.classList.remove('cur')});
+    cur=(i+groups.length)%groups.length;
+    groups[cur].forEach(function(m){m.classList.add('cur')});
+    groups[cur][0].scrollIntoView({block:'center'});
+    qcount.textContent=(cur+1)+' / '+groups.length;
+  }
+  var groups=[];
+  function run(){
+    clearMarks();groups=[];
+    var term=fold(q.value.trim().replace(/\s+/g,' ')).replace(/[\u2018\u2019]/g,"'");
+    if(term.length<2){qcount.textContent='';return}
+    groups=highlight(term);
+    groups.forEach(function(g){g.forEach(function(m){marks.push(m)})});
+    if(!groups.length){qcount.textContent='Nessun risultato';return}
+    show(0);
+  }
+  q.addEventListener('input',function(){clearTimeout(timer);timer=setTimeout(run,250)});
+  q.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){e.preventDefault();clearTimeout(timer);if(!groups.length)run();else show(cur+(e.shiftKey?-1:1))}
+    else if(e.key==='Escape')closeSearch();
+  });
+  function openSearch(){body.classList.add('search-open');q.focus();q.select()}
+  function closeSearch(){body.classList.remove('search-open');clearMarks();groups=[];q.value='';qcount.textContent=''}
+  document.getElementById('sBtn').onclick=openSearch;
+  document.getElementById('qClose').onclick=closeSearch;
+  document.getElementById('qNext').onclick=function(){show(cur+1)};
+  document.getElementById('qPrev').onclick=function(){show(cur-1)};
+  addEventListener('keydown',function(e){
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'){e.preventDefault();openSearch()}
+    else if(e.key==='/'&&document.activeElement!==q&&!/input|textarea/i.test(document.activeElement.tagName)){e.preventDefault();openSearch()}
+  });
   var prog=document.getElementById('prog'),ticking=false;
   function update(){
     ticking=false;
