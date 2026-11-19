@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Text Portal</title>
+<!--
+  THE LAB KIT PORTAL
+
+  One HTML file, no build step, no framework, no server: open it by double-clicking.
+  Texts come from the files named in catalogue.js, pulled in with plain <script> tags,
+  which is why it works from file:// as well as from GitHub Pages.
+
+  What it does, and where to find it below:
+    Search       a question box over every text: words (spellings merged), "phrases", stem*, /regex/
+    Read         open a text, go to a passage, find in the text
+    Connections  beside any open passage: the same ref in other texts, curated parallels,
+                 and passages that share rare words
+    Handouts     collect passages, add notes, reorder, export Markdown / print to PDF
+    About        the texts, who made them, how accurate they are, and a health check
+
+  To make it yours, edit catalogue.js and parallels.js, not this file. To change what the
+  portal does, ask Claude for it in plain words: docs/working-with-claude.md.
+-->
+<script src="catalogue.js"></script>
+<script src="parallels.js"></script>
+<style>
+:root{--bg:#faf8f3;--fg:#202124;--muted:#6f6b63;--accent:#7a2f10;--accent2:#1d5c7a;--panel:#f1ede3;--line:#ddd5c4;--hit:#ffe58a;--cur:#f4b942;--card:#fffdf8}
+[data-theme=dark]{--bg:#141517;--fg:#dcd9d2;--muted:#8b8881;--accent:#e3a56e;--accent2:#7cb7d6;--panel:#1c1e21;--line:#34363b;--hit:#5a4a14;--cur:#8a6a14;--card:#1a1c1f}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font:16px/1.5 Georgia,"Iowan Old Style",serif;display:flex;flex-direction:column;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:none;border:1px solid var(--line);border-radius:6px;padding:3px 10px;cursor:pointer;font-size:13px;font-family:system-ui,sans-serif}
+button:hover{border-color:var(--accent);color:var(--accent)}
+button.primary{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+button.on{border-color:var(--accent);color:var(--accent)}
+input[type=search],input[type=text],textarea,select{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+a{color:var(--accent2)}
+code{font-size:.9em;background:var(--panel);padding:0 4px;border-radius:3px}
+header{display:flex;align-items:center;gap:14px;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--line);font-family:system-ui,sans-serif;flex-wrap:wrap}
+header h1{margin:0;font-size:17px}
+header nav{display:flex;gap:4px}
+header nav button{border:none;padding:5px 12px;font-size:14px}
+header nav button.on{background:var(--bg);border:1px solid var(--line);color:var(--accent)}
+header .sp{flex:1}
+#sub{color:var(--muted);font-size:12px}
+#app{flex:1;display:flex;min-height:0}
+#main{flex:1;overflow:auto;padding:18px 24px 80px;min-width:0}
+#pane{width:42%;max-width:640px;min-width:320px;border-left:1px solid var(--line);background:var(--panel);overflow:auto;display:none;flex-direction:column}
+body.pane #pane{display:flex}
+.view{max-width:880px;margin:0 auto}
+.askrow{display:flex;gap:8px;margin:6px 0 4px}
+.askrow input{flex:1;font-size:18px;padding:8px 12px}
+.opts{font:13px system-ui,sans-serif;color:var(--muted);margin:2px 0 14px;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.opts label{cursor:pointer}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:10px 0 12px;font-family:system-ui,sans-serif}
+.tabs button{border:none;border-bottom:2px solid transparent;border-radius:0;padding:6px 12px;font-size:14px}
+.tabs button.on{border-bottom-color:var(--accent)}
+.hint{color:var(--muted);font:13px system-ui,sans-serif}
+.layer{margin:22px 0 6px;font:600 12px system-ui,sans-serif;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.tcard{border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin:6px 0;background:var(--card);cursor:pointer}
+.tcard:hover{border-color:var(--accent)}
+.tcard b{font-size:17px}
+.tcard .m{font:12.5px system-ui,sans-serif;color:var(--muted)}
+.hit{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin:8px 0}
+.hit.sel,.ctx.sel{outline:2px solid var(--accent)}
+.hit .head,.ctx .head{display:flex;gap:8px;align-items:baseline;font:13px system-ui,sans-serif;color:var(--muted);margin-bottom:3px;flex-wrap:wrap}
+.hit .head .c,.ctx .head .c{color:var(--accent);font-weight:600;cursor:pointer}
+.hit .head .sp,.ctx .head .sp{flex:1}
+.txt{white-space:pre-wrap}
+.en{color:var(--muted);font-size:.93em;margin-top:5px;white-space:pre-wrap}
+body.noen .en{display:none}
+mark{background:var(--hit);color:inherit;border-radius:2px;padding:0 1px}
+mark.cur{background:var(--cur);outline:1px solid var(--accent)}
+.acc{font:11px system-ui,sans-serif;border:1px solid var(--line);border-radius:10px;padding:0 6px;color:var(--muted)}
+.ctx{padding:6px 12px;border-left:3px solid transparent;margin:2px 0;cursor:pointer}
+.ctx:hover{background:var(--panel)}
+.ctx.sel{border-left-color:var(--accent);outline:none;background:var(--card)}
+.secH{font:600 14px system-ui,sans-serif;margin:22px 0 4px;color:var(--accent)}
+.rd{display:flex;gap:18px}
+.toc{width:230px;flex:none;font:13.5px system-ui,sans-serif;position:sticky;top:0;align-self:flex-start;max-height:calc(100vh - 140px);overflow:auto}
+.toc a{display:block;padding:3px 6px;color:var(--fg);text-decoration:none;cursor:pointer;border-radius:4px}
+.toc a:hover{background:var(--panel)}
+.rbody{flex:1;min-width:0}
+.rbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font:13px system-ui,sans-serif;margin:8px 0 12px;position:sticky;top:-18px;background:var(--bg);padding:8px 0;z-index:2;border-bottom:1px solid var(--line)}
+.rbar input{width:170px}
+.pane-head{padding:10px 14px;border-bottom:1px solid var(--line);font:13px system-ui,sans-serif;display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:sticky;top:0;background:var(--panel);z-index:2}
+.pane-head b{font-size:15px;color:var(--accent)}
+.pane-head .sp{flex:1}
+.pane-body{padding:10px 14px 60px}
+.conn h4{font:600 12px system-ui,sans-serif;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:16px 0 4px}
+.conn .it{border:1px solid var(--line);border-radius:8px;background:var(--card);padding:8px 12px;margin:6px 0;cursor:pointer}
+.conn .it:hover{border-color:var(--accent)}
+.conn .why{font:12.5px system-ui,sans-serif;color:var(--muted);margin-top:3px}
+.conn .shared{font:12px system-ui,sans-serif;color:var(--accent2)}
+table{border-collapse:collapse;width:100%;font:14px system-ui,sans-serif}
+th,td{border-bottom:1px solid var(--line);text-align:left;padding:5px 8px;vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.ok{color:#2a7a3a}.bad{color:#b3261e}.warn{color:#9a6a00}
+.hd{border:1px solid var(--line);border-radius:8px;background:var(--card);padding:10px 14px;margin:8px 0}
+.hd.heading{background:none;border:none;border-bottom:2px solid var(--accent);padding:6px 0;margin-top:18px}
+.hd.note{border-left:4px solid var(--accent2)}
+.hd .tools{display:flex;gap:4px;margin:6px 0 0;flex-wrap:wrap}
+.hd input[type=text],.hd textarea{width:100%;margin-top:4px;font-size:14px}
+.hd textarea{min-height:56px;resize:vertical}
+.hd .lab{font:12px system-ui,sans-serif;color:var(--muted)}
+#selbtn{position:fixed;display:none;z-index:50;background:var(--accent);color:var(--bg);border-color:var(--accent);box-shadow:0 2px 8px rgba(0,0,0,.3)}
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:7px 14px;border-radius:8px;font:13px system-ui,sans-serif;display:none;z-index:60}
+#loading{padding:60px;text-align:center;color:var(--muted);font-family:system-ui,sans-serif}
+@media(max-width:900px){#pane{position:fixed;inset:48px 0 0 0;width:100%;max-width:none}.toc{display:none}}
+@media print{header,#pane,.tools,.noprint,#selbtn,.rbar{display:none!important}body{display:block;overflow:visible;height:auto;background:#fff;color:#000}#app,#main{display:block;overflow:visible;padding:0}.hd{break-inside:avoid;border-color:#bbb}.en{color:#444}}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="ptitle">Text Portal</h1>
+  <span id="sub"></span>
+  <nav id="nav">
+    <button data-tab="search">Search</button>
+    <button data-tab="read">Read</button>
+    <button data-tab="handouts">Handouts <span id="hcount"></span></button>
+    <button data-tab="about">About</button>
+  </nav>
+  <span class="sp"></span>
+  <label class="hint"><input type="checkbox" id="enToggle" checked> translations</label>
+  <button id="theme" title="Light / dark">☾</button>
+</header>
+<div id="app">
+  <div id="main"><div id="loading">Loading the texts…</div></div>
+  <aside id="pane"></aside>
+</div>
+<button id="selbtn"></button>
+<div id="toast"></div>
+
+<script>
+(function () {
+'use strict';
+
+/* ═══ Configuration (from catalogue.js) ═══════════════════════════════════════ */
+const CFG = Object.assign({ title: 'Text Portal', subtitle: '', layers: [{ key: 'primary', label: 'Texts' }],
+  spelling: [], stopwords: [], about: '', storagePrefix: 'labkit' }, typeof PORTAL_CONFIG !== 'undefined' ? PORTAL_CONFIG : {});
+const TEXT_DEFS = (typeof PORTAL_TEXTS !== 'undefined' ? PORTAL_TEXTS : []);
+const PARALLELS = (typeof PORTAL_PARALLELS !== 'undefined' ? PORTAL_PARALLELS : []);
+const SPELL = CFG.spelling.map(r => [new RegExp(r[0], 'g'), r[1]]);
+const STOP = new Set(CFG.stopwords.map(w => norm(w)));
+const LS = (() => { try { return window.localStorage; } catch (e) { return null; } })();
+const sget = (k, d) => { try { const v = LS && LS.getItem(CFG.storagePrefix + '-' + k); return v == null ? d : v; } catch (e) { return d; } };
+const sset = (k, v) => { try { LS && LS.setItem(CFG.storagePrefix + '-' + k, v); } catch (e) {} };
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function toast(t) { const e = $('toast'); e.textContent = t; e.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => e.style.display = 'none', 2200); }
+
+/* ═══ Words: tokenising, and one normal form for many spellings ═══════════════ */
+const WORD = /[\p{L}\p{M}][\p{L}\p{M}'’\-]*/gu;
+function norm(w) {                       // lower-case, accents off, then your spelling rules
+  let n = w.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’]/g, "'");
+  for (const [re, to] of SPELL) n = n.replace(re, to);
+  return n.replace(/^['\-]+|['\-]+$/g, '');
+}
+function tokens(text) {                  // [{s, e, n}] with character offsets
+  const out = []; let m; WORD.lastIndex = 0;
+  while ((m = WORD.exec(text))) { const n = norm(m[0]); if (n) out.push({ s: m.index, e: m.index + m[0].length, n }); }
+  return out;
+}
+
+/* ═══ Loading the texts ═══════════════════════════════════════════════════════ */
+const TEXTS = [], P = new Map(), ALL = [], IDX = new Map(), SURF = new Map(), PROBLEMS = [];
+const layerLabel = k => (CFG.layers.find(l => l.key === k) || { label: k }).label;
+function readGlobal(name) { try { return (0, eval)(name); } catch (e) { return undefined; } }
+
+function loadScript(src) {
+  return new Promise(res => { const s = document.createElement('script'); s.src = src; s.onload = () => res(true); s.onerror = () => res(false); document.head.appendChild(s); });
+}
+async function loadAll() {
+  await Promise.all(TEXT_DEFS.map(async d => {
+    const ok = await loadScript(d.file);
+    if (!ok) { PROBLEMS.push({ lvl: 'bad', msg: `${d.key}: could not load ${d.file}` }); return; }
+    const data = readGlobal(d.global);
+    if (!data || !Array.isArray(data.passages)) { PROBLEMS.push({ lvl: 'bad', msg: `${d.key}: ${d.file} does not declare ${d.global} with a passages array` }); return; }
+    d._data = data;
+  }));
+  TEXT_DEFS.forEach(d => {
+    if (!d._data) return;
+    const t = Object.assign({}, d, { passages: [], bySec: [] });
+    const seen = new Set();
+    d._data.passages.forEach((p, i) => {
+      if (p.id == null || p.id === '') { PROBLEMS.push({ lvl: 'bad', msg: `${d.key}: passage #${i + 1} has no id` }); return; }
+      if (seen.has(String(p.id))) { PROBLEMS.push({ lvl: 'bad', msg: `${d.key}: duplicate id “${p.id}”` }); return; }
+      seen.add(String(p.id));
+      if (!p.text || !String(p.text).trim()) PROBLEMS.push({ lvl: 'warn', msg: `${d.key}:${p.id} has no text` });
+      const q = { addr: d.key + ':' + p.id, key: d.key, id: String(p.id), cite: p.cite || String(p.id), text: String(p.text || ''), en: p.en || '', ref: p.ref || '', sec: p.sec || '', year: p.year || d.year, idx: t.passages.length, t };
+      t.passages.push(q); P.set(q.addr, q); ALL.push(q);
+    });
+    TEXTS.push(t);
+  });
+  TEXTS.sort((a, b) => layerOrder(a.layer) - layerOrder(b.layer) || (a.year || 0) - (b.year || 0));
+  ALL.sort((a, b) => TEXTS.indexOf(a.t) - TEXTS.indexOf(b.t) || a.idx - b.idx);
+  ALL.forEach((p, n) => { p.n = n; });
+  buildIndex();
+  checkHealth();
+}
+const layerOrder = k => { const i = CFG.layers.findIndex(l => l.key === k); return i < 0 ? 99 : i; };
+
+function buildIndex() {
+  ALL.forEach(p => {
+    p.tok = tokens(p.text);
+    const uniq = new Set();
+    p.tok.forEach(t => {
+      uniq.add(t.n);
+      let m = SURF.get(t.n); if (!m) SURF.set(t.n, m = new Map());
+      const surf = p.text.slice(t.s, t.e), k = p.key + '\u0001' + surf;
+      m.set(k, (m.get(k) || 0) + 1);
+    });
+    uniq.forEach(n => { let a = IDX.get(n); if (!a) IDX.set(n, a = []); a.push(p.n); });
+  });
+}
+function checkHealth() {
+  PARALLELS.forEach((x, i) => ['a', 'b'].forEach(s => { if (!P.has(x[s])) PROBLEMS.push({ lvl: 'bad', msg: `parallels.js entry ${i + 1}: no passage “${x[s]}”` }); }));
+  TEXT_DEFS.forEach(d => { if (d.on && !TEXT_DEFS.some(o => o.key === d.on)) PROBLEMS.push({ lvl: 'warn', msg: `${d.key}: “on: ${d.on}” names no text in the catalogue` }); });
+  TEXT_DEFS.forEach(d => { if (!CFG.layers.some(l => l.key === d.layer)) PROBLEMS.push({ lvl: 'warn', msg: `${d.key}: layer “${d.layer}” is not in PORTAL_CONFIG.layers` }); });
+  const keys = TEXT_DEFS.map(d => d.key); keys.forEach((k, i) => { if (keys.indexOf(k) !== i) PROBLEMS.push({ lvl: 'bad', msg: `two texts share the key “${k}”` }); });
+}
+
+/* ═══ Queries ═════════════════════════════════════════════════════════════════
+   words (all must occur in a passage) · "a phrase" · stem* · /regular expression/ */
+function parseQuery(q) {
+  const terms = []; const re = /"([^"]+)"|\/((?:[^\/\\]|\\.)+)\/|(\S+)/g; let m;
+  while ((m = re.exec(q))) {
+    if (m[1] != null) { const w = tokens(m[1]).map(t => t.n); if (w.length) terms.push({ t: 'phrase', w }); }
+    else if (m[2] != null) { try { terms.push({ t: 'rx', rx: new RegExp(m[2], 'giu') }); } catch (e) { terms.push({ t: 'bad', src: m[2] }); } }
+    else { const pre = /\*$/.test(m[3]); const w = tokens(m[3].replace(/\*/g, ' ')).map(t => t.n); if (w.length === 1) terms.push({ t: pre ? 'prefix' : 'word', w: w[0] }); else if (w.length > 1) terms.push({ t: 'phrase', w }); }
+  }
+  return terms;
+}
+let keyList = null;
+function matchingKeys(prefix) { if (!keyList) keyList = [...IDX.keys()]; return keyList.filter(k => k.startsWith(prefix)); }
+function candidates(term) {                // a Set of passage numbers, or null for "scan all"
+  if (term.t === 'word') return new Set(IDX.get(term.w) || []);
+  if (term.t === 'prefix') { const s = new Set(); matchingKeys(term.w).forEach(k => IDX.get(k).forEach(n => s.add(n))); return s; }
+  if (term.t === 'phrase') { let s = null; term.w.forEach(w => { const a = new Set(IDX.get(w) || []); s = s ? new Set([...s].filter(n => a.has(n))) : a; }); return s; }
+  return null;
+}
+function hasPhrase(p, w) { const n = p.tok.map(t => t.n); for (let i = 0; i + w.length <= n.length; i++) { let ok = true; for (let j = 0; j < w.length; j++) if (n[i + j] !== w[j]) { ok = false; break; } if (ok) return true; } return false; }
+function runQuery(q, only) {
+  const terms = parseQuery(q); if (!terms.length || terms.some(t => t.t === 'bad')) return { terms, hits: [], bad: terms.find(t => t.t === 'bad') };
+  let set = null;
+  terms.forEach(t => { const c = candidates(t); if (c) set = set ? new Set([...set].filter(n => c.has(n))) : c; });
+  let list = set ? [...set].map(n => ALL[n]) : ALL.slice();
+  list = list.filter(p => terms.every(t => t.t === 'phrase' ? hasPhrase(p, t.w) : t.t === 'rx' ? (t.rx.lastIndex = 0, t.rx.test(p.text) || (p.en && (t.rx.lastIndex = 0, t.rx.test(p.en)))) : true));
+  if (only && only.size) list = list.filter(p => only.has(p.key));
+  list.sort((a, b) => a.n - b.n);
+  return { terms, hits: list };
+}
+
+/* Mark the words of `text` that the terms match. */
+function ranges(text, tok, terms) {
+  const r = []; const n = tok.map(t => t.n);
+  terms.forEach(t => {
+    if (t.t === 'word') tok.forEach(k => { if (k.n === t.w) r.push([k.s, k.e]); });
+    else if (t.t === 'prefix') tok.forEach(k => { if (k.n.startsWith(t.w)) r.push([k.s, k.e]); });
+    else if (t.t === 'phrase') for (let i = 0; i + t.w.length <= n.length; i++) { let ok = true; for (let j = 0; j < t.w.length; j++) if (n[i + j] !== t.w[j]) { ok = false; break; } if (ok) r.push([tok[i].s, tok[i + t.w.length - 1].e]); }
+    else if (t.t === 'rx') { t.rx.lastIndex = 0; let m; while ((m = t.rx.exec(text)) && m[0].length) r.push([m.index, m.index + m[0].length]); }
+  });
+  return r;
+}
+function markup(text, tok, terms, tag) {
+  const r = ranges(text, tok, terms).sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+  let out = '', pos = 0;
+  r.forEach(([s, e]) => { if (s < pos) return; out += esc(text.slice(pos, s)) + '<mark>' + esc(text.slice(s, e)) + '</mark>'; pos = e; });
+  return out + esc(text.slice(pos));
+}
+const highlight = (p, terms) => terms && terms.length ? markup(p.text, p.tok, terms) : esc(p.text);
+function highlightEn(p, terms) {                      // a translation is marked by regex terms only, and words that are typed as is
+  if (!terms || !terms.length) return esc(p.en);
+  const tk = tokens(p.en); const lit = terms.filter(t => t.t === 'rx');
+  return lit.length ? markup(p.en, tk, lit) : esc(p.en);
+}
+
+/* ═══ State and routing ═══════════════════════════════════════════════════════ */
+const S = { tab: 'search', q: '', only: new Set(), shown: 60, rtab: 'results', open: null, ptab: 'ctx', read: null, find: '', findAt: 0 };
+function setHash() {
+  const h = []; if (S.tab !== 'search') h.push('tab=' + S.tab);
+  if (S.q) h.push('q=' + encodeURIComponent(S.q)); if (S.read) h.push('read=' + S.read);
+  if (S.open) h.push('p=' + encodeURIComponent(S.open));
+  history.replaceState(null, '', '#' + h.join('&'));
+}
+function readHash() {
+  const o = {}; location.hash.replace(/^#/, '').split('&').forEach(kv => { const i = kv.indexOf('='); if (i > 0) o[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); });
+  if (o.tab) S.tab = o.tab; if (o.q) { S.q = o.q; S.tab = 'search'; } if (o.read) { S.read = o.read; S.tab = 'read'; } if (o.p) S.open = o.p;
+}
+
+/* ═══ Rendering: shared pieces ═══════════════════════════════════════════════ */
+function accBadge(t) { return t.accuracy ? `<span class="acc" title="${esc(t.accuracy.how || '')}">${esc(t.accuracy.label || (t.accuracy.ocr ? 'OCR ~' + t.accuracy.words + '%' : 'accuracy'))}</span>` : ''; }
+function passageCard(p, terms, o) {
+  o = o || {};
+  const sel = S.open === p.addr ? ' sel' : '';
+  return `<div class="hit${sel}" data-addr="${esc(p.addr)}">
+    <div class="head"><span class="c" data-open="${esc(p.addr)}">${esc(p.cite)}</span><span>${esc(p.t.short || p.t.title)}</span>${accBadge(p.t)}<span class="sp"></span>
+      <button data-add="${esc(p.addr)}" title="Add to the open handout">+ Handout</button><button data-readat="${esc(p.addr)}" title="Open this text on the left, at this passage">Read</button></div>
+    <div class="txt" data-open="${esc(p.addr)}">${highlight(p, terms)}</div>
+    ${p.en ? `<div class="en">${highlightEn(p, terms)}</div>` : ''}</div>`;
+}
+
+/* ═══ SEARCH ═════════════════════════════════════════════════════════════════ */
+function viewSearch() {
+  const res = S.q ? runQuery(S.q, S.only) : null;
+  let h = `<div class="view"><div class="askrow"><input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="Ask the texts… a word, “a phrase”, stem*, /regex/" value="${esc(S.q)}"><button class="primary" id="go">Search</button></div>
+  <div class="opts"><span>Where:</span>${TEXTS.map(t => `<label><input type="checkbox" data-only="${esc(t.key)}" ${!S.only.size || S.only.has(t.key) ? 'checked' : ''}> ${esc(t.short || t.title)}</label>`).join('')}</div>`;
+  if (!res) {
+    h += `<p class="hint">Spellings count as one word (${CFG.spelling.length ? 'your rules: ' + CFG.spelling.map(r => esc(r[0]) + '→' + esc(r[1])).join(', ') : 'none set in catalogue.js yet'}), accents are ignored, and a <code>*</code> ends a word any way. Select words in any passage to search for them.</p>`;
+    h += textList('search');
+  } else if (res.bad) {
+    h += `<p class="bad">That regular expression does not parse: <code>${esc(res.bad.src)}</code></p>`;
+  } else {
+    const n = res.hits.length;
+    h += `<div class="tabs"><button data-rtab="results" class="${S.rtab === 'results' ? 'on' : ''}">Passages (${n})</button><button data-rtab="over" class="${S.rtab === 'over' ? 'on' : ''}">Overview</button></div>`;
+    if (!n) h += `<p class="hint">Nothing found. Try a stem (<code>${esc((S.q.split(/\s+/)[0] || '').replace(/\*$/, ''))}*</code>) or fewer words.</p>`;
+    else if (S.rtab === 'over') h += overview(res);
+    else {
+      h += res.hits.slice(0, S.shown).map(p => passageCard(p, res.terms)).join('');
+      if (n > S.shown) h += `<p><button id="more">Show ${Math.min(60, n - S.shown)} more (of ${n - S.shown})</button></p>`;
+    }
+  }
+  return h + '</div>';
+}
+function overview(res) {                    // which spellings of each word, where, how often
+  let h = '<p class="hint">The phrasings behind your words: every spelling the texts use, and how often.</p>';
+  res.terms.filter(t => t.t === 'word' || t.t === 'prefix').forEach(t => {
+    const keys = t.t === 'word' ? [t.w] : matchingKeys(t.w);
+    h += `<h4>${esc(t.w)}${t.t === 'prefix' ? '*' : ''}</h4><table><tr><th>Spelling</th><th>Text</th><th>Count</th></tr>`;
+    const rows = [];
+    keys.forEach(k => (SURF.get(k) || new Map()).forEach((c, kk) => { const [tk, surf] = kk.split('\u0001'); rows.push([surf, tk, c]); }));
+    rows.sort((a, b) => b[2] - a[2]).slice(0, 80).forEach(r => { const tx = TEXTS.find(x => x.key === r[1]); h += `<tr><td>${esc(r[0])}</td><td>${esc(tx ? tx.short || tx.title : r[1])}</td><td>${r[2]}</td></tr>`; });
+    h += '</table>';
+  });
+  const per = TEXTS.map(t => [t, res.hits.filter(p => p.key === t.key).length]).filter(x => x[1]);
+  return h + '<h4>Passages by text</h4><table>' + per.map(([t, c]) => `<tr><td>${esc(t.title)}</td><td>${c}</td></tr>`).join('') + '</table>';
+}
+function textList(from) {
+  let h = '', last = null;
+  TEXTS.forEach(t => {
+    if (t.layer !== last) { h += `<div class="layer">${esc(layerLabel(t.layer))}</div>`; last = t.layer; }
+    h += `<div class="tcard" data-read="${esc(t.key)}"><b>${esc(t.title)}</b> ${accBadge(t)}<div class="m">${esc(t.date || '')} · ${t.passages.length} passages${t.on ? ' · on ' + esc((TEXTS.find(x => x.key === t.on) || {}).short || t.on) : ''}</div></div>`;
+  });
+  return h;
+}
+
+/* ═══ READ ═══════════════════════════════════════════════════════════════════ */
+const CHUNK = 120;
+function viewRead() {
+  const t = TEXTS.find(x => x.key === S.read);
+  if (!t) return `<div class="view"><p class="hint">Open any text to read it through. Click a passage to see what hangs on it.</p>${textList('read')}</div>`;
+  const secs = []; t.passages.forEach(p => { if (p.sec && (!secs.length || secs[secs.length - 1].sec !== p.sec)) secs.push({ sec: p.sec, i: p.idx }); });
+  return `<div class="view" style="max-width:1100px"><p><button data-read="">← all texts</button></p>
+  <div class="rd">${secs.length > 1 ? `<nav class="toc"><b>Contents</b>${secs.map(s => `<a data-goto="${s.i}">${esc(s.sec)}</a>`).join('')}</nav>` : ''}
+  <div class="rbody"><h2 style="margin:.2em 0">${esc(t.title)} ${accBadge(t)}</h2><div class="hint">${esc(t.date || '')}${t.source ? ' · ' + esc(t.source) : ''}</div>
+  <div class="rbar"><span>Go to</span><input type="text" id="goto" placeholder="a citation or id" list="gl"><datalist id="gl">${t.passages.slice(0, 2000).map(p => `<option value="${esc(p.cite)}">`).join('')}</datalist>
+    <span>Find in this text</span><input type="search" id="find" placeholder="word, “phrase”, stem*" value="${esc(S.find)}"><button id="fprev">‹</button><button id="fnext">›</button><span id="fcount" class="hint"></span></div>
+  <div id="rlist"></div><div id="rsent"></div></div></div></div>`;
+}
+let readCount = CHUNK;
+function paintRead(from, upTo) {
+  const t = TEXTS.find(x => x.key === S.read); if (!t) return;
+  const terms = S.find ? parseQuery(S.find) : [];
+  const host = $('rlist'); if (!host) return;
+  const end = Math.min(t.passages.length, upTo);
+  let h = '', lastSec = from > 0 ? t.passages[from - 1].sec : null;
+  for (let i = from; i < end; i++) {
+    const p = t.passages[i];
+    if (p.sec && p.sec !== lastSec) { h += `<div class="secH" id="sec-${i}">${esc(p.sec)}</div>`; lastSec = p.sec; }
+    h += `<div class="ctx${S.open === p.addr ? ' sel' : ''}" id="r-${i}" data-open="${esc(p.addr)}"><div class="head"><span class="c">${esc(p.cite)}</span><span class="sp"></span><button data-add="${esc(p.addr)}">+ Handout</button></div><div class="txt">${highlight(p, terms)}</div>${p.en ? `<div class="en">${highlightEn(p, terms)}</div>` : ''}</div>`;
+  }
+  if (from === 0) host.innerHTML = h; else host.insertAdjacentHTML('beforeend', h);
+  readCount = end;
+  $('rsent').innerHTML = end < t.passages.length ? `<p class="hint">Showing ${end} of ${t.passages.length}. <button id="rmore">Show more</button></p>` : '';
+}
+function ensureShown(i) { if (i >= readCount) paintRead(readCount, Math.ceil((i + 1) / CHUNK) * CHUNK + CHUNK); }
+function gotoPassage(i, flash) {
+  ensureShown(i); const el = $('r-' + i); if (!el) return;
+  el.scrollIntoView({ block: 'center' });
+}
+let findHits = [];
+function runFind() {
+  const t = TEXTS.find(x => x.key === S.read); if (!t) return;
+  const f = $('find'); S.find = f ? f.value : S.find;
+  paintRead(0, Math.max(readCount, CHUNK));
+  const terms = parseQuery(S.find);
+  findHits = [];
+  if (terms.length && !terms.some(x => x.t === 'bad')) {
+    const r = runQuery(S.find, new Set([t.key])); findHits = r.hits;
+    const last = findHits.length ? findHits[findHits.length - 1].idx : -1; if (last >= readCount) ensureShown(last);
+  }
+  S.findAt = 0; const c = $('fcount'); if (c) c.textContent = S.find ? findHits.length + ' passages' : '';
+  if (findHits.length) stepFind(0);
+}
+function stepFind(d) {
+  if (!findHits.length) return; S.findAt = (S.findAt + d + findHits.length) % findHits.length;
+  ensureShown(findHits[S.findAt].idx);
+  const el = $('r-' + findHits[S.findAt].idx); if (!el) return;
+  document.querySelectorAll('mark.cur').forEach(m => m.classList.remove('cur'));
+  const m = el.querySelector('mark'); if (m) m.classList.add('cur');
+  el.scrollIntoView({ block: 'center' }); $('fcount').textContent = (S.findAt + 1) + ' / ' + findHits.length + ' passages';
+}
+
+/* ═══ THE RIGHT-HAND PANE: a passage in its text, and what it connects to ═════ */
+function openPassage(addr, tab) {
+  const p = P.get(addr); if (!p) return;
+  document.querySelectorAll('#main .hit.sel,#main .ctx.sel').forEach(e => e.classList.remove('sel'));
+  S.open = addr; if (tab) S.ptab = tab; document.body.classList.add('pane'); setHash(); paintPane();
+  document.querySelectorAll('[data-addr="' + CSS.escape(addr) + '"]').forEach(e => e.classList.add('sel'));
+  const r = document.getElementById('r-' + p.idx); if (r && S.read === p.key) r.classList.add('sel');
+}
+function paintPane() {
+  const p = P.get(S.open), pane = $('pane'); if (!p) { document.body.classList.remove('pane'); return; }
+  const terms = S.tab === 'search' && S.q ? parseQuery(S.q) : (S.tab === 'read' && S.find ? parseQuery(S.find) : []);
+  let h = `<div class="pane-head"><b>${esc(p.cite)}</b><span>${esc(p.t.short || p.t.title)}</span>${accBadge(p.t)}<span class="sp"></span>
+    <button data-add="${esc(p.addr)}">+ Handout</button><button data-copylink="${esc(p.addr)}">Copy link</button><button id="pclose">✕</button></div>
+    <div class="pane-head" style="top:42px;padding:4px 14px"><div class="tabs" style="margin:0;border:none"><button data-ptab="ctx" class="${S.ptab === 'ctx' ? 'on' : ''}">In its text</button><button data-ptab="conn" class="${S.ptab === 'conn' ? 'on' : ''}">Connections</button></div></div><div class="pane-body">`;
+  if (S.ptab === 'conn') h += connections(p);
+  else {
+    const a = Math.max(0, p.idx - 6), b = Math.min(p.t.passages.length, p.idx + 7);
+    for (let i = a; i < b; i++) { const q = p.t.passages[i]; h += `<div class="ctx${q === p ? ' sel' : ''}" id="px-${i}" data-open="${esc(q.addr)}"><div class="head"><span class="c">${esc(q.cite)}</span></div><div class="txt">${q === p ? highlight(q, terms) : esc(q.text)}</div>${q.en ? `<div class="en">${esc(q.en)}</div>` : ''}</div>`; }
+    h += `<p><button data-readat="${esc(p.addr)}">Read this text on the left, at this passage</button></p>`;
+  }
+  pane.innerHTML = h + '</div>';
+  const at = $('px-' + p.idx); if (at && S.ptab === 'ctx') at.scrollIntoView({ block: 'center' });
+}
+function itemCard(q, why, extra) {
+  return `<div class="it" data-open="${esc(q.addr)}" data-keeptab="1"><div class="head" style="font:12.5px system-ui,sans-serif;color:var(--muted)"><b style="color:var(--accent)">${esc(q.cite)}</b> · ${esc(q.t.short || q.t.title)} <button data-add="${esc(q.addr)}" style="float:right">+ Handout</button></div>
+    <div class="txt">${esc(q.text.length > 320 ? q.text.slice(0, 320) + '…' : q.text)}</div>${q.en ? `<div class="en">${esc(q.en.length > 200 ? q.en.slice(0, 200) + '…' : q.en)}</div>` : ''}${why ? `<div class="why">${why}</div>` : ''}${extra || ''}</div>`;
+}
+function connections(p) {
+  let h = '<div class="conn">', any = false;
+  // 1. the same ref in other texts (the text it is on first)
+  if (p.ref) {
+    const same = ALL.filter(q => q !== p && q.ref === p.ref);
+    if (same.length) {
+      any = true; h += `<h4>The same place (<code>${esc(p.ref)}</code>)</h4>`;
+      same.sort((a, b) => (b.key === p.t.on) - (a.key === p.t.on)).forEach(q => { h += itemCard(q); });
+    }
+  }
+  // 2. curated parallels
+  const par = PARALLELS.filter(x => x.a === p.addr || x.b === p.addr);
+  if (par.length) { any = true; h += '<h4>Parallels the class has made</h4>'; par.forEach(x => { const q = P.get(x.a === p.addr ? x.b : x.a); if (q) h += itemCard(q, esc(x.note || '') + (x.by ? ` <i>— ${esc(x.by)}</i>` : '')); }); }
+  // 3. by machine: rare words in common
+  const mine = [...new Set(p.tok.map(t => t.n))].filter(n => !STOP.has(n) && n.length > 2);
+  const N = ALL.length, score = new Map(), shared = new Map();
+  mine.forEach(n => { const a = IDX.get(n) || []; if (a.length > Math.max(25, N * .08) || a.length < 2) return; const w = Math.log(N / a.length); a.forEach(k => { if (k === p.n) return; score.set(k, (score.get(k) || 0) + w); (shared.get(k) || shared.set(k, []).get(k)).push(n); }); });
+  const best = [...score.entries()].filter(([k]) => shared.get(k).length >= 2 || mine.length < 4).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  if (best.length) { any = true; h += '<h4>Found by machine: rare words in common</h4><p class="hint">Not checked by hand. Passages that share the words below, rarer words counting for more.</p>'; best.forEach(([k]) => h += itemCard(ALL[k], null, `<div class="shared">shares: ${shared.get(k).slice(0, 8).map(esc).join(', ')}</div>`)); }
+  if (!any) h += '<p class="hint">Nothing connects to this passage yet. Give passages in two texts the same <code>ref</code> in their data files, or add a line to <code>parallels.js</code>.</p>';
+  return h + '</div>';
+}
+
+/* ═══ HANDOUTS: collect passages, add notes, reorder, export ═════════════════ */
+function loadHD() { try { const d = JSON.parse(sget('handouts-v1', 'null')); if (d && d.list && d.list.length) return d; } catch (e) {} return { cur: 0, list: [{ title: 'Handout 1', items: [] }] }; }
+let HD = loadHD();
+const hd = () => HD.list[HD.cur] || HD.list[0];
+function saveHD() { sset('handouts-v1', JSON.stringify(HD)); $('hcount').textContent = hd().items.filter(i => i.t === 'p').length || ''; }
+function addToHandout(addr) {
+  const p = P.get(addr); if (!p) return;
+  if (hd().items.some(i => i.t === 'p' && i.addr === addr)) { toast('Already in “' + hd().title + '”'); return; }
+  hd().items.push({ t: 'p', addr, label: '', note: '' }); saveHD(); toast('Added to “' + hd().title + '”'); if (S.tab === 'handouts') render();
+}
+function viewHandouts() {
+  const H = hd();
+  let h = `<div class="view"><div class="noprint" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;font:13px system-ui,sans-serif">
+    <select id="hsel">${HD.list.map((x, i) => `<option value="${i}" ${i === HD.cur ? 'selected' : ''}>${esc(x.title)}</option>`).join('')}</select>
+    <button id="hnew">+ New handout</button><button id="hdel">Delete this one</button><span class="sp" style="flex:1"></span>
+    <button id="hmd">Copy Markdown</button><button id="hmdf">Download .md</button><button id="hprint">Print / PDF</button><button id="hsave">Save to file</button><button id="hopen">Open file</button><input type="file" id="hfile" accept=".json" hidden></div>
+    <input type="text" id="htitle" value="${esc(H.title)}" style="font-size:22px;width:100%;margin-bottom:8px">
+    <div class="noprint" style="margin-bottom:6px"><button id="haddhead">+ Heading</button> <button id="haddnote">+ Note</button> <span class="hint">Add passages with “+ Handout” wherever you find them.</span></div>`;
+  if (!H.items.length) h += '<p class="hint">Empty. Find a passage in Search or Read and press <b>+ Handout</b>.</p>';
+  H.items.forEach((it, i) => {
+    const tools = `<div class="tools"><button data-hmove="${i}:-1">↑</button><button data-hmove="${i}:1">↓</button><button data-hdelitem="${i}">✕</button></div>`;
+    if (it.t === 'h') h += `<div class="hd heading"><input type="text" data-hf="${i}:text" value="${esc(it.text)}" placeholder="Heading" style="font-size:19px;font-weight:600;border:none;background:none">${tools}</div>`;
+    else if (it.t === 'n') h += `<div class="hd note"><input type="text" data-hf="${i}:title" value="${esc(it.title || '')}" placeholder="Note title (optional)"><textarea data-hf="${i}:text" placeholder="Your setup, a claim, a question for students…">${esc(it.text || '')}</textarea>${tools}</div>`;
+    else { const p = P.get(it.addr); h += `<div class="hd"><div class="lab"><b style="color:var(--accent)">${p ? esc(p.cite) : esc(it.addr)}</b> · ${p ? esc(p.t.title) : 'missing text'}${p ? ' ' + accBadge(p.t) : ''}</div>
+      <div class="txt">${p ? esc(p.text) : ''}</div>${p && p.en ? `<div class="en">${esc(p.en)}</div>` : ''}
+      <input type="text" data-hf="${i}:label" value="${esc(it.label || '')}" placeholder="Label (e.g. Against X)"><textarea data-hf="${i}:note" placeholder="Your note on this passage">${esc(it.note || '')}</textarea>
+      ${tools.replace('</div>', `<button data-open="${esc(it.addr)}">Open</button></div>`)}</div>`; }
+  });
+  return h + '</div>';
+}
+function handoutMarkdown() {
+  const H = hd(), en = !document.body.classList.contains('noen'); let m = '# ' + H.title + '\n\n';
+  H.items.forEach(it => {
+    if (it.t === 'h') m += '## ' + it.text + '\n\n';
+    else if (it.t === 'n') m += (it.title ? '### ' + it.title + '\n\n' : '') + (it.text || '') + '\n\n';
+    else { const p = P.get(it.addr); if (!p) return;
+      m += (it.label ? '**' + it.label + '**\n\n' : '') + p.text.split('\n').map(l => '> ' + l).join('\n') + '\n>\n> — ' + p.cite + ' (' + p.t.title + ')' + '\n\n';
+      if (en && p.en) m += p.en.split('\n').map(l => '> ' + l).join('\n') + '\n\n';
+      if (it.note) m += it.note + '\n\n'; }
+  });
+  return m.trim() + '\n';
+}
+function download(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); }
+
+/* ═══ ABOUT: texts, credit, accuracy, health ═════════════════════════════════ */
+function viewAbout() {
+  let h = `<div class="view">${CFG.about}<h3>Texts</h3><table><tr><th>Text</th><th>Layer</th><th>Date</th><th>Passages</th><th>Source and credit</th></tr>`;
+  TEXTS.forEach(t => h += `<tr><td><b>${esc(t.title)}</b> ${accBadge(t)}<br><span class="hint">key: ${esc(t.key)}</span></td><td>${esc(layerLabel(t.layer))}</td><td>${esc(t.date || '')}</td><td>${t.passages.length}</td><td>${esc(t.source || '')}<br><span class="hint">${esc(t.credit || '')}</span>${t.accuracy ? `<br><span class="hint">Accuracy: ${esc(t.accuracy.how || t.accuracy.label || '')}</span>` : ''}</td></tr>`);
+  h += `</table><h3>Health check</h3>`;
+  const words = IDX.size;
+  h += `<p class="hint">${ALL.length} passages, ${words} distinct normalised words, ${PARALLELS.length} curated parallels.</p>`;
+  if (!PROBLEMS.length) h += '<p class="ok">✓ Every file loaded, every id is unique, every parallel points at a real passage.</p>';
+  else h += '<ul>' + PROBLEMS.map(p => `<li class="${p.lvl}">${esc(p.msg)}</li>`).join('') + '</ul>';
+  return h + '</div>';
+}
+
+/* ═══ Render and events ══════════════════════════════════════════════════════ */
+function render() {
+  document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === S.tab));
+  const m = $('main');
+  if (S.tab === 'search') m.innerHTML = viewSearch();
+  else if (S.tab === 'read') { m.innerHTML = viewRead(); if (S.read) { paintRead(0, CHUNK); if (S.find) runFind(); } }
+  else if (S.tab === 'handouts') m.innerHTML = viewHandouts();
+  else m.innerHTML = viewAbout();
+  if (S.open && P.has(S.open)) { document.body.classList.add('pane'); paintPane(); } else { S.open = null; document.body.classList.remove('pane'); }
+  setHash();
+}
+function go(tab, extra) { S.tab = tab; Object.assign(S, extra || {}); render(); $('main').scrollTop = 0; }
+function doSearch() { const q = $('q'); S.q = q ? q.value.trim() : S.q; S.shown = 60; S.rtab = 'results'; render(); const q2 = $('q'); if (q2) q2.focus(); }
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('button,[data-open],[data-read],[data-goto],a');
+  if (!t) return;
+  const d = t.dataset;
+  if (d.tab) return go(d.tab);
+  if (t.id === 'go') return doSearch();
+  if (t.id === 'more') { S.shown += 60; return render(); }
+  if (d.rtab) { S.rtab = d.rtab; return render(); }
+  if (d.add) { e.stopPropagation(); return addToHandout(d.add); }
+  if (d.readat) { const p = P.get(d.readat); S.open = d.readat; return go('read', { read: p.key, find: '' }), setTimeout(() => gotoPassage(p.idx), 0); }
+  if (d.read !== undefined) { return go('read', { read: d.read || null, find: '' }); }
+  if (d.goto) return gotoPassage(+d.goto);
+  if (d.ptab) { S.ptab = d.ptab; return paintPane(); }
+  if (d.copylink) { try { navigator.clipboard.writeText(location.href.split('#')[0] + '#p=' + encodeURIComponent(d.copylink)); toast('Link copied'); } catch (x) { toast('Copy the address bar'); } return; }
+  if (t.id === 'pclose') { S.open = null; document.body.classList.remove('pane'); document.querySelectorAll('.sel').forEach(x => x.classList.remove('sel')); return setHash(); }
+  if (t.id === 'rmore') return paintRead(readCount, readCount + CHUNK);
+  if (t.id === 'fprev') return stepFind(-1); if (t.id === 'fnext') return stepFind(1);
+  if (d.open) { if (t.tagName === 'BUTTON') return openPassage(d.open); if (getSelection().toString().trim()) return; return openPassage(d.open, d.keeptab ? S.ptab : 'ctx'); }
+  // handouts
+  if (t.id === 'hnew') { HD.list.push({ title: 'Handout ' + (HD.list.length + 1), items: [] }); HD.cur = HD.list.length - 1; saveHD(); return render(); }
+  if (t.id === 'hdel') { if (confirm('Delete “' + hd().title + '”?')) { HD.list.splice(HD.cur, 1); if (!HD.list.length) HD.list.push({ title: 'Handout 1', items: [] }); HD.cur = 0; saveHD(); render(); } return; }
+  if (t.id === 'haddhead') { hd().items.push({ t: 'h', text: '' }); saveHD(); return render(); }
+  if (t.id === 'haddnote') { hd().items.push({ t: 'n', title: '', text: '' }); saveHD(); return render(); }
+  if (d.hmove) { const [i, dir] = d.hmove.split(':').map(Number), a = hd().items, j = i + dir; if (j >= 0 && j < a.length) { [a[i], a[j]] = [a[j], a[i]]; saveHD(); render(); } return; }
+  if (d.hdelitem) { hd().items.splice(+d.hdelitem, 1); saveHD(); return render(); }
+  if (t.id === 'hmd') { try { navigator.clipboard.writeText(handoutMarkdown()); toast('Markdown copied'); } catch (x) { toast('Use Download .md'); } return; }
+  if (t.id === 'hmdf') return download(hd().title.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').toLowerCase() + '.md', handoutMarkdown(), 'text/markdown');
+  if (t.id === 'hprint') return window.print();
+  if (t.id === 'hsave') return download(CFG.storagePrefix + '-handouts.json', JSON.stringify(HD, null, 1), 'application/json');
+  if (t.id === 'hopen') return $('hfile').click();
+  if (t.id === 'theme') { const dk = document.documentElement.dataset.theme !== 'dark'; document.documentElement.dataset.theme = dk ? 'dark' : 'light'; sset('theme', dk ? 'dark' : 'light'); t.textContent = dk ? '☀' : '☾'; return; }
+});
+document.addEventListener('change', e => {
+  const t = e.target, d = t.dataset;
+  if (d.only !== undefined) { const all = new Set(TEXTS.map(x => x.key)); const cur = S.only.size ? new Set(S.only) : new Set(all); t.checked ? cur.add(d.only) : cur.delete(d.only); S.only = cur.size === all.size ? new Set() : cur; if (S.q) { S.shown = 60; render(); } return; }
+  if (t.id === 'hsel') { HD.cur = +t.value; saveHD(); return render(); }
+  if (t.id === 'enToggle') { document.body.classList.toggle('noen', !t.checked); sset('en', t.checked ? '1' : '0'); return; }
+  if (t.id === 'goto') { const t0 = TEXTS.find(x => x.key === S.read); const v = t.value.trim().toLowerCase(); const p = t0 && (t0.passages.find(p => p.cite.toLowerCase() === v) || t0.passages.find(p => p.id.toLowerCase() === v) || t0.passages.find(p => p.cite.toLowerCase().includes(v))); if (p) { gotoPassage(p.idx); openPassage(p.addr, 'ctx'); } else toast('No passage “' + t.value + '”'); return; }
+  if (t.id === 'hfile') { const f = t.files[0]; if (!f) return; f.text().then(s => { try { const d = JSON.parse(s); if (!d.list) throw 0; HD = d; HD.cur = 0; saveHD(); render(); toast('Handouts opened'); } catch (x) { toast('Not a handout file'); } }); }
+});
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.hf) { const [i, f] = t.dataset.hf.split(':'); hd().items[+i][f] = t.value; saveHD(); }
+  else if (t.id === 'htitle') { hd().title = t.value; saveHD(); }
+  else if (t.id === 'find') { clearTimeout(input.t); input.t = setTimeout(runFind, 250); }
+});
+function input() {}
+document.addEventListener('keydown', e => {
+  if (e.target.id === 'q' && e.key === 'Enter') return doSearch();
+  if (e.target.id === 'find' && e.key === 'Enter') { e.preventDefault(); return stepFind(e.shiftKey ? -1 : 1); }
+  if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); go('search'); const q = $('q'); q && q.focus(); }
+  if (e.key === 'Escape' && S.open) { S.open = null; document.body.classList.remove('pane'); setHash(); }
+});
+/* select words anywhere → offer to search for them */
+document.addEventListener('mouseup', e => {
+  const b = $('selbtn'); if (e.target === b) return;
+  setTimeout(() => {
+    const s = getSelection(), txt = s.toString().trim().replace(/\s+/g, ' ');
+    if (txt.length < 2 || txt.length > 80 || !s.rangeCount || e.target.closest('input,textarea,header')) { b.style.display = 'none'; return; }
+    const r = s.getRangeAt(0).getBoundingClientRect(); b.textContent = 'Search for “' + (txt.length > 28 ? txt.slice(0, 28) + '…' : txt) + '”';
+    b.dataset.q = txt; b.style.left = Math.max(8, Math.min(innerWidth - 220, r.left)) + 'px'; b.style.top = Math.max(8, r.top - 36) + 'px'; b.style.display = 'block';
+  }, 0);
+});
+$('selbtn').addEventListener('click', e => { const q = e.target.dataset.q; e.target.style.display = 'none'; getSelection().removeAllRanges(); S.q = q.indexOf(' ') > 0 ? '"' + q + '"' : q; S.shown = 60; go('search'); });
+
+/* ═══ Start ═══════════════════════════════════════════════════════════════════ */
+document.title = CFG.title; $('ptitle').textContent = CFG.title; $('sub').textContent = CFG.subtitle;
+const th = sget('theme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); document.documentElement.dataset.theme = th; $('theme').textContent = th === 'dark' ? '☀' : '☾';
+if (sget('en', '1') === '0') { document.body.classList.add('noen'); $('enToggle').checked = false; }
+readHash();
+loadAll().then(() => {
+  saveHD(); render();
+  window.PORTAL = { S, P, TEXTS, ALL, runQuery, parseQuery, norm, tokens, openPassage, addToHandout, PROBLEMS };   // for add-ons: tools that sit beside the portal read it through this
+});
+addEventListener('hashchange', () => { readHash(); render(); });
+})();
+</script>
+</body>
+</html>

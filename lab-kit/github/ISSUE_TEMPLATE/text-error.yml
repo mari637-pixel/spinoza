@@ -1,0 +1,45 @@
+name: Text error
+description: A word, a passage or a citation in one of the texts is wrong
+title: "Text error: "
+labels: ["text-error"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        You are the experts on the texts, and these reports are among the most valuable things anyone can file. Please give your source, so the correction can be checked.
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: The text and the passage, e.g. its link from "Copy link" in the portal
+    validations:
+      required: true
+  - type: textarea
+    id: shows
+    attributes:
+      label: What the portal shows
+    validations:
+      required: true
+  - type: textarea
+    id: should
+    attributes:
+      label: What it should show
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Your source
+      description: The edition and its page
+    validations:
+      required: true
+  - type: dropdown
+    id: confidence
+    attributes:
+      label: How sure are you?
+      options:
+        - Certain — checked against the edition
+        - Probable
+        - A question
+    validations:
+      required: true

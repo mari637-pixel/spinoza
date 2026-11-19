@@ -1,0 +1,15 @@
+{
+  // The preview server for the Claude desktop app's Browser pane: serves the repository
+  // root, so that portal/index.html is at http://127.0.0.1:8000/portal/index.html.
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lab",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8000", "--bind", "127.0.0.1"],
+      "port": 8000,
+      "autoPort": false,
+      "url": "http://127.0.0.1:8000"
+    }
+  ]
+}

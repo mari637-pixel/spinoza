@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Method Log</title>
+<script src="sessions.js"></script>
+<style>
+:root{--bg:#faf8f3;--fg:#202124;--muted:#6f6b63;--accent:#7a2f10;--panel:#f1ede3;--line:#ddd5c4;--card:#fffdf8}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 Georgia,serif}
+header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-family:system-ui,sans-serif}
+header h1{font-size:17px;margin:0}header .sp{flex:1}
+main{max-width:860px;margin:0 auto;padding:18px 20px 80px}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:none;border:1px solid var(--line);border-radius:6px;padding:3px 10px;cursor:pointer;font:13px system-ui,sans-serif}
+button:hover,button.on{border-color:var(--accent);color:var(--accent)}
+input,select,textarea{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:5px 8px;width:100%}
+textarea{min-height:60px}
+label{display:block;font:12px system-ui,sans-serif;color:var(--muted);margin:8px 0 2px}
+.card{border:1px solid var(--line);border-radius:8px;background:var(--card);padding:10px 14px;margin:10px 0}
+.m{font:12.5px system-ui,sans-serif;color:var(--muted)}
+.v{font:600 11px system-ui,sans-serif;border-radius:10px;padding:1px 8px;border:1px solid var(--line)}
+.v.worked{color:#2a7a3a;border-color:#2a7a3a}.v.partly{color:#9a6a00;border-color:#9a6a00}.v.failed{color:#b3261e;border-color:#b3261e}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.idea{border-left:3px solid var(--line);padding:2px 0 2px 12px;margin:10px 0}
+.tag{font:12px system-ui,sans-serif;color:var(--accent)}
+</style>
+</head>
+<body>
+<header><h1>Method Log</h1><button id="vS" class="on">Sessions</button><button id="vI">All ideas</button><button id="vT">Threads</button><span class="sp"></span><button id="new">+ New session</button><button id="exp">Export all (.json)</button></header>
+<main id="m"></main>
+<script>
+(function(){
+var KEY='labkit-method-log-v1',$=function(i){return document.getElementById(i)};
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
+function mine(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return []}}
+function save(a){try{localStorage.setItem(KEY,JSON.stringify(a))}catch(e){}}
+function all(){return (typeof METHOD_SESSIONS!=='undefined'?METHOD_SESSIONS.map(function(s){return Object.assign({committed:true},s)}):[]).concat(mine().map(function(s,i){return Object.assign({mineIdx:i},s)})).sort(function(a,b){return (b.date||'').localeCompare(a.date||'')})}
+var view='s',editing=null;
+function ideaHtml(i,s){return '<div class="idea"><b>'+esc(i.idea)+'</b> <span class="v '+esc((i.verdict||'').split(' ')[0])+'">'+esc(i.verdict||'not judged yet')+'</span>'+(i.thread?' <span class="tag">#'+esc(i.thread)+'</span>':'')+
+ '<div class="m">'+esc(i.kind||'')+(i.raisedBy?' · raised by '+esc(i.raisedBy):'')+(s?' · '+esc(s.date)+' '+esc(s.title):'')+'</div>'+(i.tried?'<div>Tried: '+esc(i.tried)+'</div>':'')+(i.why?'<div>Why: '+esc(i.why)+'</div>':'')+(i.version?'<div class="m">Version: '+(/^https?:/.test(i.version)?'<a href="'+esc(i.version)+'">'+esc(i.version)+'</a>':esc(i.version))+'</div>':'')+'</div>'}
+function sessions(){var h='';all().forEach(function(s){h+='<div class="card"><b>'+esc(s.title)+'</b><div class="m">'+esc(s.date)+' · '+esc(s.type||'')+(s.committed?' · in the repository':' · in this browser')+'</div>'+(s.goal?'<p><i>Goal:</i> '+esc(s.goal)+'</p>':'')+(s.summary?'<p>'+esc(s.summary)+'</p>':'')+(s.changed?'<p><i>What we changed:</i> '+esc(s.changed)+'</p>':'')+(s.next?'<p><i>Next:</i> '+esc(s.next)+'</p>':'')+(s.ideas||[]).map(function(i){return ideaHtml(i)}).join('')+(s.mineIdx!=null?'<button data-edit="'+s.mineIdx+'">Edit</button> <button data-copy="'+s.mineIdx+'">Copy as sessions.js entry</button> <button data-del="'+s.mineIdx+'">Delete</button>':'')+'</div>'});return h||'<p class="m">No sessions yet. Press + New session.</p>'}
+function ideas(){var f=$('fv')?$('fv').value:'';var h='<label>Verdict</label><select id="fv"><option value="">any</option><option>worked</option><option>partly</option><option>failed</option><option>not judged yet</option></select>';var n=0;all().forEach(function(s){(s.ideas||[]).forEach(function(i){if(f&&(i.verdict||'not judged yet')!==f)return;n++;h+=ideaHtml(i,s)})});return h+(n?'':'<p class="m">None.</p>')}
+function threads(){var t={};all().slice().reverse().forEach(function(s){(s.ideas||[]).forEach(function(i){var k=i.thread||'(no thread)';(t[k]=t[k]||[]).push([i,s])})});return Object.keys(t).sort().map(function(k){return '<div class="card"><b class="tag">#'+esc(k)+'</b>'+t[k].map(function(x){return ideaHtml(x[0],x[1])}).join('')+'</div>'}).join('')||'<p class="m">No threads yet.</p>'}
+function form(s){s=s||{date:new Date().toISOString().slice(0,10),type:'class',ideas:[]};
+ return '<div class="card"><div class="row"><div><label>Date</label><input id="fd" type="date" value="'+esc(s.date)+'"></div><div><label>Type</label><select id="ft">'+['class','lab','work session','office hours'].map(function(t){return '<option'+(t===s.type?' selected':'')+'>'+t+'</option>'}).join('')+'</select></div></div>'+
+ '<label>Title</label><input id="fti" value="'+esc(s.title||'')+'"><label>Goal</label><input id="fg" value="'+esc(s.goal||'')+'"><label>Summary</label><textarea id="fs">'+esc(s.summary||'')+'</textarea><label>What we changed (tools, questions, method)</label><textarea id="fc">'+esc(s.changed||'')+'</textarea><label>Next steps</label><textarea id="fn">'+esc(s.next||'')+'</textarea>'+
+ '<h4>Ideas discussed</h4><div id="ideas">'+(s.ideas||[]).map(ideaForm).join('')+'</div><button id="addidea">+ Idea</button> <button id="save" class="on">Save session</button> <button id="cancel">Cancel</button></div>'}
+function ideaForm(i){i=i||{};return '<div class="idea" data-i><label>Idea or question</label><input class="i-idea" value="'+esc(i.idea||'')+'"><label>What we tried</label><textarea class="i-tried">'+esc(i.tried||'')+'</textarea><div class="row"><div><label>Kind</label><select class="i-kind">'+['search','feature','prompt','discussion','other'].map(function(k){return '<option'+(k===i.kind?' selected':'')+'>'+k+'</option>'}).join('')+'</select></div><div><label>Verdict</label><select class="i-verdict">'+['not judged yet','worked','partly','failed'].map(function(k){return '<option'+(k===i.verdict?' selected':'')+'>'+k+'</option>'}).join('')+'</select></div></div><label>Why</label><input class="i-why" value="'+esc(i.why||'')+'"><div class="row"><div><label>Raised by</label><input class="i-by" value="'+esc(i.raisedBy||'')+'"></div><div><label>Thread (a short tag)</label><input class="i-thread" value="'+esc(i.thread||'')+'"></div></div><label>Tool version (preview link or commit id)</label><input class="i-ver" value="'+esc(i.version||'')+'"></div>'}
+function read(){var g=function(i){return $(i).value},ideas=[].map.call(document.querySelectorAll('[data-i]'),function(d){var q=function(c){return d.querySelector(c).value};return {idea:q('.i-idea'),tried:q('.i-tried'),kind:q('.i-kind'),version:q('.i-ver'),verdict:q('.i-verdict'),why:q('.i-why'),raisedBy:q('.i-by'),thread:q('.i-thread')}}).filter(function(i){return i.idea.trim()});return {date:g('fd'),title:g('fti')||'(untitled)',type:g('ft'),goal:g('fg'),summary:g('fs'),changed:g('fc'),next:g('fn'),ideas:ideas}}
+function draw(){['vS','vI','vT'].forEach(function(b){$(b).classList.toggle('on',b==='v'+view.toUpperCase())});$('m').innerHTML=editing!=null?form(editing===-1?null:mine()[editing]):(view==='s'?sessions():view==='i'?ideas():threads())}
+document.addEventListener('click',function(e){var t=e.target,d=t.dataset||{};
+ if(t.id==='vS'){view='s';editing=null;draw()}else if(t.id==='vI'){view='i';editing=null;draw()}else if(t.id==='vT'){view='t';editing=null;draw()}
+ else if(t.id==='new'){editing=-1;draw()}else if(t.id==='cancel'){editing=null;draw()}else if(t.id==='addidea'){$('ideas').insertAdjacentHTML('beforeend',ideaForm())}
+ else if(t.id==='save'){var a=mine(),s=read();if(editing>=0)a[editing]=s;else a.push(s);save(a);editing=null;view='s';draw()}
+ else if(d.edit!=null){editing=+d.edit;draw()}
+ else if(d.del!=null){if(confirm('Delete this session?')){var b=mine();b.splice(+d.del,1);save(b);draw()}}
+ else if(d.copy!=null){var s2=mine()[+d.copy];navigator.clipboard.writeText('  '+JSON.stringify(s2,null,2).replace(/\n/g,'\n  ')+',\n').then(function(){alert('Copied. Paste it into METHOD_SESSIONS in method-log/sessions.js.')})}
+ else if(t.id==='exp'){var a2=document.createElement('a');a2.href=URL.createObjectURL(new Blob([JSON.stringify(all(),null,1)],{type:'application/json'}));a2.download='method-log.json';a2.click()}});
+document.addEventListener('change',function(e){if(e.target.id==='fv'){var v=e.target.value;draw();$('fv').value=v;$('m').innerHTML=ideas();$('fv').value=v}});
+draw();
+})();
+</script>
+</body></html>
