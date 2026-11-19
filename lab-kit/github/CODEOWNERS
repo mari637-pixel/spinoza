@@ -1,0 +1,18 @@
+# Who must approve a pull request, by path. The LAST matching line wins.
+# Everyone listed must have Write access to the repository, or the line is ignored.
+# Replace the handles below. These lines are the Kant Lab's arrangement; change them to yours.
+
+# Default: the instructor, or any one of the default reviewers beside them, approves
+# everything not matched below.
+*                    @INSTRUCTOR @REVIEWER-1 @REVIEWER-2
+# Who approves what is the instructor's decision alone, so this file needs the instructor.
+/.github/CODEOWNERS  @INSTRUCTOR
+# Personal sandboxes: no owner, so the author merges their own pull request.
+/Individuals/
+# The portal is the whole seminar's and has no owner: whoever makes a change merges it.
+/portal/
+# The shared data and how it is made have student owners, who approve each other's changes.
+# Always include the instructor, so that a stuck change can be unblocked.
+/portal/data/        @INSTRUCTOR @DATA-OWNER-1 @DATA-OWNER-2
+/tools/              @INSTRUCTOR @DATA-OWNER-1 @DATA-OWNER-2
+/sources/            @INSTRUCTOR @DATA-OWNER-1 @DATA-OWNER-2

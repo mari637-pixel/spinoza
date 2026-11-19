@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""Turn a plain-text (or Markdown) transcription into a portal data file.
+
+    python3 tools/import_text.py my-text.txt --global MY_TEXT --work "Author, Title" \
+        --out portal/data/my-text.js
+
+Then add one entry to portal/catalogue.js (the script prints it for you to paste).
+
+How the text is cut into passages (the default is blank lines between paragraphs):
+    --split blank      one passage per paragraph, i.e. per run of non-blank lines (default)
+    --split line       one passage per non-blank line (verse, numbered sentences, aphorisms)
+    --split regex --pattern '^§\\s*(\\d+)'
+                       a new passage starts at every line matching the pattern; group 1, if
+                       there is one, becomes the passage's number (so ids can be § numbers)
+
+Headings: a line starting with '# ' or '## ' is not a passage; it becomes the `sec` (the
+section heading the Read page's contents list shows) of every passage after it.
+
+Ids and citations:
+    --id-prefix p      ids are p1, p2, ... (default 'p'); with --split regex and a captured
+                       number, the id is the prefix plus that number
+    --cite '{n}'       the citation template; {n} is the passage's number, {id} its id,
+                       {sec} its section. e.g. --cite 'Ethics I, {n}'  or  --cite '§ {n}'
+Translations: --en other.txt, split the same way, with the same number of passages, is
+attached as each passage's `en` (check the count: the script stops if they differ).
+
+The output is `const NAME = { meta, passages }` with valid JSON after the `=`, so
+tools/check_data.py can read it. Re-run this script rather than hand-editing the data file:
+corrections belong in the source text or in this script's options, so they survive the next run.
+"""
+import argparse, json, re, sys, unicodedata
+
+def cut(text, how, pattern):
+    """-> list of (number or None, section, text)"""
+    out, sec, buf, num = [], '', [], None
+    def flush():
+        nonlocal buf, num
+        t = '\n'.join(buf).strip()
+        if t:
+            out.append((num, sec, t))
+        buf, num = [], None
+    rx = re.compile(pattern) if pattern else None
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        m = re.match(r'^#{1,3}\s+(.*\S)\s*$', line)
+        if m:
+            flush(); sec = m.group(1); continue
+        if how == 'blank':
+            if line.strip() == '': flush()
+            else: buf.append(line.strip())
+        elif how == 'line':
+            if line.strip(): out.append((None, sec, line.strip()))
+        else:  # regex
+            mm = rx.search(line)
+            if mm:
+                flush(); num = mm.group(1) if mm.groups() else None
+                rest = line[mm.end():].strip()
+                if rest: buf.append(rest)
+            elif line.strip(): buf.append(line.strip())
+    flush()
+    return out
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('source'); ap.add_argument('--out', required=True)
+    ap.add_argument('--global', dest='glob', required=True, help='the JavaScript name the file declares, e.g. MY_TEXT')
+    ap.add_argument('--work', default=''); ap.add_argument('--volume', default='')
+    ap.add_argument('--split', choices=['blank', 'line', 'regex'], default='blank'); ap.add_argument('--pattern')
+    ap.add_argument('--id-prefix', default='p'); ap.add_argument('--cite', default='{n}')
+    ap.add_argument('--en', help='a translation file, split the same way'); ap.add_argument('--year', type=int)
+    ap.add_argument('--key', help='the catalogue key to print in the suggested entry')
+    a = ap.parse_args()
+    if a.split == 'regex' and not a.pattern: ap.error('--split regex needs --pattern')
+    if not re.match(r'^[A-Z_][A-Z0-9_]*$', a.glob): ap.error('--global should be UPPER_SNAKE_CASE, e.g. MY_TEXT')
+
+    def read(p):
+        with open(p, encoding='utf-8-sig') as f: return unicodedata.normalize('NFC', f.read())
+    src = cut(read(a.source), a.split, a.pattern)
+    en = cut(read(a.en), a.split, a.pattern) if a.en else None
+    if en is not None and len(en) != len(src):
+        sys.exit(f'The translation has {len(en)} passages, the text {len(src)}. Fix the files so they match, then run again.')
+    passages, seen = [], set()
+    for i, (num, sec, text) in enumerate(src, 1):
+        n = num if num is not None else str(i)
+        pid = a.id_prefix + n
+        if pid in seen: pid = f'{pid}-{i}'; print(f'note: duplicate number {n}; id made {pid}', file=sys.stderr)
+        seen.add(pid)
+        p = {'id': pid, 'cite': a.cite.format(n=n, id=pid, sec=sec), 'text': text}
+        if en: p['en'] = en[i - 1][2]
+        if sec: p['sec'] = sec
+        if a.year: p['year'] = a.year
+        passages.append(p)
+    body = {'meta': {'work': a.work, 'volume': a.volume}, 'passages': passages}
+    with open(a.out, 'w', encoding='utf-8') as f:
+        f.write(f"/* Generated by tools/import_text.py from {a.source}. Do not edit by hand: change the source or the\n   import options and run it again. Valid JSON after `const {a.glob} =`. */\nconst {a.glob} = ")
+        json.dump(body, f, ensure_ascii=False, indent=1); f.write(';\n')
+    words = sum(len(p['text'].split()) for p in passages)
+    print(f'{len(passages)} passages, {words} words -> {a.out}')
+    rel = a.out.split('portal/', 1)[-1]
+    key = a.key or a.glob.lower().replace('_', '-')
+    print(f"\nPaste into PORTAL_TEXTS in portal/catalogue.js:\n\n  {{ key: '{key}', title: {json.dumps(a.work or key)}, short: {json.dumps((a.work or key)[:18])}, layer: 'primary',\n    date: '', year: {a.year or 0},\n    file: '{rel}', global: '{a.glob}',\n    source: 'where this transcription came from, and how clean it is', credit: 'who brought it in' }},")
+
+if __name__ == '__main__':
+    main()
